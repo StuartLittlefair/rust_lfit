@@ -103,6 +103,7 @@ impl Brightspot {
         (r.x, r.y)
     }
 
+    #[pyo3(signature=(q, rd, az, frac, scale, exp1=None, exp2=None, tilt=None, yaw=None))]
     pub fn tweak(
         &mut self, q: f64, rd: f64, az: f64, 
         frac: f64, scale: f64, 
