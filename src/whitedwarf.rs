@@ -234,12 +234,15 @@ impl Whitedwarf {
             let range = rw2 - xlo;
             let dx = range / nrad as f64 / rw2;
             // sum over radial annuli
-            wflux = (1..=nrad).into_par_iter().map(|i| {
+            // serial faster than parallel as we parellelise over phases instead
+            wflux = 0.0;
+            for i in 1..=nrad {
                 let x = xlo + range * (i as f64 - 0.5) / nrad as f64;
                 let theta = ((fac-x)/2.0/pd/x.sqrt()).acos();
                 let flux: f64 = theta * (1.0 - self.ulimb * (1.0 - (1.0-x/rw2).sqrt()));
-                flux
-            }).sum();
+                wflux += flux;
+            }
+            
             wflux = wflux * dx / PI / (1.0 - self.ulimb/3.0);
         } else {
             let rlo = pd - rc;
@@ -251,13 +254,7 @@ impl Whitedwarf {
             let range = rw2 - xlo;
             let dx = range / nrad as f64 / rw2;
             // sum over radial annuli
-            wflux = (1..=nrad).into_par_iter().map(|i| {
-                let x = xlo + range * (i as f64 - 0.5) / nrad as f64;
-                let theta = PI - ((fac-x)/2.0/pd/x.sqrt()).acos();
-                let flux: f64 = theta * (1.0 - self.ulimb * (1.0 - (1.0-x/rw2).sqrt()));
-                flux
-            }).sum();
-            /*
+            // serial faster than parallel as we parellelise over phases instead
             wflux = 0.0;
             for i in 1..=nrad {
                 let x = xlo + range * (i as f64 - 0.5) / nrad as f64;
@@ -265,7 +262,6 @@ impl Whitedwarf {
                 let flux: f64 = theta * (1.0 - self.ulimb * (1.0 - (1.0-x/rw2).sqrt()));
                 wflux += flux;
             }
-            */
             wflux = 1.0 - dx * wflux/PI/(1.0-self.ulimb/3.0);
         }       
         wflux

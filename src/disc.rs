@@ -149,7 +149,7 @@ impl Disc {
     fn calcflux_at_point(&self, _q: f64, phi: f64, incl: f64) -> f64 {
         let earth: Vec3 = set_earth_iangle(incl, phi);
         // use rayon to parallelise the flux calculation across the grid points
-        let sum: f32 = (0..self.grid.len()).into_par_iter().map(|i| {
+        let sum: f32 = (0..self.grid.len()).into_iter().map(|i| {
             let mut flux: f32 = 0.0;
             let p: &Point = &self.grid[i];
             if p.is_visible(phi) {
