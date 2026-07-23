@@ -95,8 +95,8 @@ impl Brightspot {
         let rtest = rd * xl1;
         let mut r: Vec3;
         let mut v: Vec3;
-        let acc = 1.0e-10;
-        let smax = 1.0e-3;
+        let acc = 1.0e-8;
+        let smax = 1.0e-4;
         (r, v) = strinit(q);
         stradv(q, &mut r, &mut v, rtest, acc, smax);
 
@@ -246,8 +246,9 @@ impl Brightspot {
         self.normalisation = maxflux;
     }
 
+    // tangent to disc rim at the bright spot position (in radians, relative to line of centres)
     pub fn get_tangent(&self) -> f64 {
-        let mut alpha = (self.x).atan2(self.y);
+        let mut alpha = (self.y).atan2(self.x);
         if alpha < 0.0 {
             // alpha is between -pi and pi
             // if negative, the spot is slightly behind the disc (alpha > pi)
