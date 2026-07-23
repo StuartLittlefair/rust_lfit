@@ -1,5 +1,5 @@
 [build-system]
-requires = ["maturin>=1.8,<2.0"]
+requires = ["maturin>=1.9.4,<2.0"]
 build-backend = "maturin"
 
 [project]
@@ -10,5 +10,5 @@ requires-python = ">=3.8"
 [tool.maturin]
 python-source = "python"
 module-name = "lfit_rust.rust"
-features = ["pyo3/extension-module"]
-cargo-extra-args = "--features extension-module"
+#features = ["pyo3/extension-module"]
+#cargo-extra-args = "--features extension-module"
