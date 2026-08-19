@@ -1,7 +1,7 @@
 use rayon::prelude::*;
 use pyo3::prelude::*;
 use std::f64::consts::{PI, TAU};
-use rust_roche::{
+use roche::{
     Vec3, 
     set_earth_iangle,
     x_l1,
@@ -290,7 +290,7 @@ impl Whitedwarf {
         // has q changed since last time? If so, recalculate xl1
         if (q-self._qcalc).abs() > 1e-6 {
             self._qcalc = q;
-            self._xl1 = x_l1(q);
+            self._xl1 = x_l1(q)?;
         }
 
         // calculate flux at each phase in phases, for given q and incl

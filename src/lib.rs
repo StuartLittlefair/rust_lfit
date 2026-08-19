@@ -1,7 +1,5 @@
 use pyo3::prelude::*;
 
-pub mod errors;
-
 pub mod donor;
 pub use donor::Donor;
 

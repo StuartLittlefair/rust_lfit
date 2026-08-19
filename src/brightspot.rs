@@ -1,7 +1,7 @@
 use rayon::prelude::*;
 use pyo3::prelude::*;
 use std::f64::consts::{TAU, FRAC_PI_2};
-use rust_roche::{
+use roche::{
     x_l1,
     strinit,
     stradv,
@@ -12,6 +12,7 @@ use rust_roche::{
     Star,
     set_earth_iangle,
 };
+use roche::errors::RocheError;
 use crate::blink;
 
 #[pyclass(from_py_object)]
@@ -46,9 +47,9 @@ impl Brightspot {
         frac: f64, scale: f64, 
         exp1: Option<f64>, exp2: Option<f64>, 
         tilt: Option<f64>, yaw: Option<f64>, 
-        nspot: Option<usize>) -> Self {
-        let xl1 = x_l1(q);
-        let (x, y) = Self::spot_position(q, rd);
+        nspot: Option<usize>) -> Result<Self, RocheError> {
+        let xl1 = x_l1(q)?;
+        let (x, y) = Self::spot_position(q, rd)?;
 
         // are we using the complex model?
         let complex = exp1.is_some() || exp2.is_some() || tilt.is_some() || yaw.is_some();
@@ -77,9 +78,9 @@ impl Brightspot {
             xl1: xl1,
         };
         if spot.complex{
-            spot.update_grid(90.0); // default inclination of 90 degrees for initial normalisation
+            spot.update_grid(90.0)?; // default inclination of 90 degrees for initial normalisation
         }
-        spot
+        Ok(spot)
     }
     
     /*
@@ -89,18 +90,18 @@ impl Brightspot {
      Calculates X,Y position of spot in units of XL1
     */
     #[staticmethod]
-    pub fn spot_position(q: f64, rd: f64) -> (f64, f64) {
+    pub fn spot_position(q: f64, rd: f64) -> Result<(f64, f64), RocheError> {
         // calculate the position of the bright spot
-        let xl1 = x_l1(q);
+        let xl1 = x_l1(q)?;
         let rtest = rd * xl1;
         let mut r: Vec3;
         let mut v: Vec3;
         let acc = 1.0e-8;
         let smax = 1.0e-4;
-        (r, v) = strinit(q);
-        stradv(q, &mut r, &mut v, rtest, acc, smax);
+        (r, v) = strinit(q)?;
+        stradv(q, &mut r, &mut v, rtest, acc, smax)?;
 
-        (r.x, r.y)
+        Ok((r.x, r.y))
     }
 
     #[pyo3(signature=(q, rd, az, frac, scale, exp1=None, exp2=None, tilt=None, yaw=None))]
@@ -108,12 +109,12 @@ impl Brightspot {
         &mut self, q: f64, rd: f64, az: f64, 
         frac: f64, scale: f64, 
         exp1: Option<f64>, exp2: Option<f64>, 
-        tilt: Option<f64>, yaw: Option<f64>){
+        tilt: Option<f64>, yaw: Option<f64>) -> Result<(), RocheError> {
 
         if (q - self.q).abs() < 1e-6 || (rd - self.rd).abs() < 1e-6 {
             self.q = q;
             self.rd = rd;
-            let (x, y) = Self::spot_position(self.q, self.rd);
+            let (x, y) = Self::spot_position(self.q, self.rd)?;
             self.x = x;
             self.y = y;
             // we've changed location of the spot, so...
@@ -123,7 +124,7 @@ impl Brightspot {
             self.grid.clear();
             if (q - self.q).abs() < 1e-6 {
                 // recalculate xl1
-                self.xl1 = x_l1(q);
+                self.xl1 = x_l1(q)?;
             }
         }
         self.az = az;
@@ -133,12 +134,13 @@ impl Brightspot {
         self.exp2 = exp2.unwrap_or(self.exp2);
         self.tilt = tilt.unwrap_or(self.tilt);
         self.yaw = yaw.unwrap_or(self.yaw);
+        Ok(())
     }
 
-    pub fn update_grid(&mut self, iangle: f64) {
+    pub fn update_grid(&mut self, iangle: f64) -> Result<(), RocheError> {
         if !self.complex {
             // we don't need a grid for the simple model
-            return;
+            return Ok(());
         }
         // angles in radians
         let theta = TAU * self.az / 360.0;
@@ -220,7 +222,7 @@ impl Brightspot {
             //q: f64, star: Star, spin: f64, ffac: f64, iangle: f64, delta: f64, r: &Vec3, ingress: &mut f64, egress: &mut f64
             let status: bool = ingress_egress(
                 self.q, Star::Secondary, 1.0, 1.0, iangle, 1.0e-8, &posn, &mut ingress, &mut egress
-            );
+            )?;
             if status {
                 eclipses.push((ingress, egress));
             }
@@ -244,6 +246,7 @@ impl Brightspot {
             }
         }
         self.normalisation = maxflux;
+        Ok(())
     }
 
     // tangent to disc rim at the bright spot position (in radians, relative to line of centres)
@@ -415,7 +418,7 @@ impl Brightspot {
     pub fn calcflux(&mut self, q: f64, incl: f64, phases: Vec<f64>, widths: Option<Vec<f64>>) -> PyResult<Vec<f64>> {
 
         let n: usize = phases.len();
-        self.update_grid(incl);
+        self.update_grid(incl)?;
 
         // calculate flux at each phase in phases, for given q and incl
         let mut fluxes: Vec<f64> = vec![0.0; n];

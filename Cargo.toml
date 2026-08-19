@@ -12,7 +12,7 @@ crate-type = ["cdylib"]
 [dependencies]
 numpy = "0.28.0"
 rayon = "1.11.0"
-rust-roche = "0.1.3"
+roche-rs = "0.5.4"
 
 [dependencies.pyo3]
 version = "0.28.2"

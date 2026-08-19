@@ -1,12 +1,13 @@
-    use crate::errors::RocheError;
 use pyo3::prelude::*;
-use rust_roche::{
+use roche::{
     Vec3,
     ingress_egress,
     Star,
     set_earth,
     fblink,
 };
+use roche::errors::RocheError;
+
 // q, i, delta_phi make a triad of values, any two of which can be used to find the third.
 
 
@@ -45,11 +46,11 @@ pub fn findi(q: f64, dphi: f64, acc: f64, delta_i: f64) -> Result<f64, RocheErro
     // eclipsed at ilo?
     let elo: bool = match fblink::fblink(q, Star::Secondary, 1.0, 1.0, acc, &earth1, &r) {
         Ok(result) => result,
-        Err(_) => return Err(RocheError::DbrentError),
+        Err(_) => return Err(RocheError::DbrentError("dbrent failed in fblink".to_string())),
     };
     let ehi: bool = match fblink::fblink(q, Star::Secondary, 1.0, 1.0, acc, &earth2, &r) {
         Ok(result) => result,
-        Err(_) => return Err(RocheError::DbrentError),
+        Err(_) => return Err(RocheError::DbrentError("dbrent failed in fblink".to_string())),
     };
     if elo && ehi {
         return Ok(-2.0);
@@ -61,7 +62,7 @@ pub fn findi(q: f64, dphi: f64, acc: f64, delta_i: f64) -> Result<f64, RocheErro
         let earth_mid: Vec3 = set_earth::set_earth_iangle(imid, phi);
         let emid: bool = match fblink::fblink(q, Star::Secondary, 1.0, 1.0, acc, &earth_mid, &r) {
             Ok(result) => result,
-            Err(_) => return Err(RocheError::DbrentError),
+            Err(_) => return Err(RocheError::DbrentError("dbrent failed in fblink".to_string())),
         };
         if emid {
             ihi = imid;
@@ -106,11 +107,11 @@ pub fn findq(i: f64, dphi: f64, acc: f64, delta_q: f64) -> Result<f64, RocheErro
 
     let elo: bool = match fblink::fblink(qlo, Star::Secondary, 1.0, 1.0, acc, &earth, &r) {
         Ok(result) => result,
-        Err(_) => return Err(RocheError::DbrentError),
+        Err(_) => return Err(RocheError::DbrentError("dbrent failed in fblink".to_string())),
     };
     let ehi: bool = match fblink::fblink(qhi, Star::Secondary, 1.0, 1.0, acc, &earth, &r) {
         Ok(result) => result,
-        Err(_) => return Err(RocheError::DbrentError),
+        Err(_) => return Err(RocheError::DbrentError("dbrent failed in fblink".to_string())),
     };
     if elo && ehi {
         return Ok(-2.0);
@@ -121,7 +122,7 @@ pub fn findq(i: f64, dphi: f64, acc: f64, delta_q: f64) -> Result<f64, RocheErro
         let qmid: f64 = (qlo + qhi)/2.0;
         let emid: bool = match fblink::fblink(qmid, Star::Secondary, 1.0, 1.0, acc, &earth, &r) {
             Ok(result) => result,
-            Err(_) => return Err(RocheError::DbrentError),
+            Err(_) => return Err(RocheError::DbrentError("dbrent failed in fblink".to_string())),
         };
         if emid {
             qhi = qmid;
@@ -143,7 +144,7 @@ pub fn findq(i: f64, dphi: f64, acc: f64, delta_q: f64) -> Result<f64, RocheErro
 /// \param delta the accuracy to use in ingress_egress.
 /// \return the phase width of the white dwarf eclipse, or -1 if the white dwarf is not eclipsed.
 ///
-pub fn findphi(q: f64, iangle: f64, delta: f64) -> f64 {
+pub fn findphi(q: f64, iangle: f64, delta: f64) -> Result<f64, RocheError> {
 
     let r: Vec3 = Vec3::new(0.0, 0.0, 0.0);
     let mut ingress: f64 = 0.0;
@@ -151,9 +152,9 @@ pub fn findphi(q: f64, iangle: f64, delta: f64) -> f64 {
     //q: f64, star: Star, spin: f64, ffac: f64, iangle: f64, delta: f64, r: &Vec3, ingress: &mut f64, egress: &mut f64
     let status: bool = ingress_egress::ingress_egress(
         q, Star::Secondary, 1.0, 1.0, iangle, delta, &r, &mut ingress, &mut egress
-    );
+    )?;
     if !status {
-        return -1.0;
+        return Ok(-1.0);
     }
-    egress-ingress
+    Ok(egress - ingress)
 }

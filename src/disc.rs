@@ -1,7 +1,7 @@
 use rayon::prelude::*;
 use pyo3::prelude::*;
 use std::f64::consts::TAU;
-use rust_roche::{
+use roche::{
     x_l1,
     Vec3,
     Point,
@@ -10,6 +10,7 @@ use rust_roche::{
     Star,
     set_earth_iangle,
 };
+use roche::errors::RocheError;
 
 #[pyclass(from_py_object)]
 #[derive(Debug, Clone)]
@@ -36,7 +37,7 @@ impl Disc {
      #[new]
     #[pyo3(signature=(q, rwd, rout, exp, size=None),
         text_signature="(q, rin, rout, exp, size=1000)")]
-    pub fn new(q: f64, rwd: f64, rout: f64, exp: f64, size: Option<usize>) -> Self {
+    pub fn new(q: f64, rwd: f64, rout: f64, exp: f64, size: Option<usize>) -> Result<Self, RocheError> {
         let size = size.unwrap_or(1000);
         let grid = Vec::with_capacity(size);
         let mut disc = Disc {
@@ -50,8 +51,8 @@ impl Disc {
             xl1: 0.0, // will be set by tweak
         };
         // sets radii in units of xl1, not separation
-        disc.tweak(q, rwd, rout, exp);
-        disc
+        disc.tweak(q, rwd, rout, exp)?;
+        Ok(disc)
     }
 
     pub fn params_changed(&self, rwd: f64, rout: f64, exp: f64) -> bool {
@@ -61,13 +62,13 @@ impl Disc {
         radius_changed || exp_changed 
     }
 
-    pub fn tweak(&mut self, q: f64, rwd: f64, rout: f64, exp: f64){
-        let xl1 = x_l1(q);
+    pub fn tweak(&mut self, q: f64, rwd: f64, rout: f64, exp: f64) -> Result<(), RocheError> {
+        let xl1 = x_l1(q)?;
         self.xl1 = xl1;
         let rwd_xl1 = rwd * xl1;
         let rout_xl1 = rout * xl1;  
         if !self.params_changed(rwd_xl1, rout_xl1, exp) {
-            return;
+            return Ok(());
         }
         // we have changed, update the parameters
         self.q = q;
@@ -77,9 +78,10 @@ impl Disc {
         // clear the grid and reset normalisation
         self.grid.clear();
         self.normalisation = -1.0;
+        Ok(())
     }
 
-    pub fn update_grid(&mut self, iangle: f64) {
+    pub fn update_grid(&mut self, iangle: f64) -> Result<(), RocheError> {
         // let's create the grid
         // we need more elements at smaller radii, since that's where most flux comes
         // from, but total number of elements must equal size.
@@ -119,7 +121,7 @@ impl Disc {
                 //q: f64, star: Star, spin: f64, ffac: f64, iangle: f64, delta: f64, r: &Vec3, ingress: &mut f64, egress: &mut f64
                 let status: bool = ingress_egress(
                     self.q, Star::Secondary, 1.0, 1.0, iangle, 1.0e-8, &posn, &mut ingress, &mut egress
-                );
+                )?;
                 if status {
                     eclipses.push((ingress, egress));
                 }
@@ -140,6 +142,7 @@ impl Disc {
             }
         }
         self.normalisation = maxflux;
+        Ok(())
     }
 
     ////
@@ -183,7 +186,7 @@ impl Disc {
     pub fn calcflux(&mut self, q: f64, incl: f64, phases: Vec<f64>, widths: Option<Vec<f64>>) -> PyResult<Vec<f64>> {
 
         let n: usize = phases.len();
-        self.update_grid(incl);
+        self.update_grid(incl)?;
 
         // calculate flux at each phase in phases, for given q and incl
         let mut fluxes: Vec<f64> = vec![0.0; n];

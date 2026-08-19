@@ -210,33 +210,6 @@ class CV:
         if incl < 0:
             raise ValueError(f"Invalid combination of q and dphi: {q}, {dphi}")
 
-        # check that brightspot parameters are valid
-        # angle can be this far from disc tangent, but no further
-        slop = 80.0
-        try:
-            # position of proposed spot
-            x, y = self.brightspot.spot_position(q, rdisc)
-        except ValueError:
-            raise ValueError(
-                f"Gas stream trajectory does not intersect disc for q={q} and rdisc={rdisc}"
-            )
-
-        # tangent to disc at this position
-        alpha = np.degrees(np.arctan2(y, x))
-
-        # alpha is between -90 and 90.
-        # if negative spot lags disc ie alpha > 90
-        alpha = 90 - alpha if alpha < 0 else alpha
-        tangent = alpha + 90
-
-        # BS azimuth should be between 0 and 178, and less than slop degrees from
-        # tangent to disc at this position
-        # if az < 0 or az > 178 or np.fabs(tangent - az) > slop:
-        if az < 0 or az > 178:
-            raise ValueError(
-                f"Invalid bright spot azimuth: {az}.\n Must be between 0 and 178, and less than {slop} degrees from tangent to disc at this position ({tangent} degrees)"
-            )
-
         self.wd.tweak(rwd, ulimb)
         self.disc.tweak(q, rwd, rdisc, dexp)
         if self.complex:
@@ -309,7 +282,8 @@ class CV:
         nspot = max(200, int(50 * SFAC / BMAX))
         nspot = min(nspot, 1000)
 
-        theta = az * 2 * np.pi / 360.0
+        tangent = np.arctan2(spoty, spotx) + np.pi / 2.0
+        theta = tangent + az * 2 * np.pi / 360.0
         steps = scale * np.linspace(0, SFAC, nspot)
         u = steps / scale
         spotx, spoty = spotx + steps * np.cos(theta), spoty + steps * np.sin(theta)

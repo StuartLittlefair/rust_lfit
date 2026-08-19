@@ -1,7 +1,9 @@
 use rayon::prelude::*;
 use pyo3::prelude::*;
 use std::f64::consts::{PI, TAU};
-use rust_roche::{Vec3, Star, RocheContext, Etype, Point, planck, set_earth_iangle};
+use roche::{Vec3, Star, RocheContext, Etype, Point, planck, set_earth_iangle};
+use roche::errors::RocheError;
+
 //use numpy::{PyReadonlyArray1, IntoPyArray, PyArray1};
 
 pub fn eggleton(q: f32) -> f32 {
@@ -112,17 +114,17 @@ impl Donor {
         count
     }
 
-    pub fn update_grid(&mut self) {
+    pub fn update_grid(&mut self) -> Result<(), RocheError> {
         // clear the grid!
         self.grid.clear();
 
         // assume synchronous rotation
-        let roche = RocheContext::new(self.q as f64, Star::Secondary, 1.0);
+        let rochectx = RocheContext::new(self.q as f64, Star::Secondary, 1.0)?;
 
         // use filling factor of 1
         let rref: f64;
         let pref: f64;
-        (rref, pref) = roche.ref_sphere(1.0);
+        (rref, pref) = rochectx.ref_sphere(1.0)?;
 
         // find the back of the secondary star
         let mut dirn: Vec3 = Vec3::new(1.0, 0.0, 0.0);
@@ -132,7 +134,7 @@ impl Donor {
         let mut norm: Vec3;
         let mut rad: f64;
         let mut grav: f64;
-        (_, _, _, grav) = roche.face(dirn, rref, pref, acc);
+        (_, _, _, grav) = rochectx.face(dirn, rref, pref, acc)?;
         self.gmin = grav as f32;
 
         // OK, let's tile the surface.
@@ -155,7 +157,7 @@ impl Donor {
                 // calculate the position of the point on the Roche lobe
                 // dirn points to this tile.
                 dirn.set(cost, sint * cosp, sint * sinp);
-                (pos, norm, rad, grav) = roche.face(dirn, rref, pref, acc);
+                (pos, norm, rad, grav) = rochectx.face(dirn, rref, pref, acc)?;
 
                 // we also need the element area, which is the circumference
                 // of the roche lobe at this point, divided by the number
@@ -176,13 +178,14 @@ impl Donor {
                 self.grid.push(p);
             }
         }
+        Ok(())
     }
 
-    fn initialise(& mut self, incl: f64) {
+    fn initialise(& mut self, incl: f64) -> Result<(), RocheError> {
         if self.grid.is_empty() && !self.approx {
             // called before grid is calculated
             println!("Warning: calculating flux before grid is calculated. Call update_grid() first.");
-            self.update_grid();
+            self.update_grid()?;
         }
         // set normalisation if not set
         if self.normalisation < 0.0 {
@@ -202,6 +205,7 @@ impl Donor {
             }).sum();
             self.normalisation = sum;
         }
+        Ok(())
     }
 
     fn calcflux_over_bin(&self, phi: f64, width: f64, incl: f64) -> f64 {
@@ -247,7 +251,7 @@ impl Donor {
         // calculate flux at each phase in phases, for given q and incl
         let mut fluxes: Vec<f64> = vec![0.0; n];
         // painless if not needed, so do each time
-        self.initialise(incl);
+        self.initialise(incl)?;
 
         match widths{
             Some(w) => {

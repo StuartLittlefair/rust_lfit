@@ -62,7 +62,7 @@ dependencies = [
  "numpy",
  "pyo3",
  "rayon",
- "rust-roche",
+ "roche-rs",
 ]
 
 [[package]]
@@ -263,13 +263,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "rust-roche"
-version = "0.1.3"
+name = "roche-rs"
+version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a677062e72d8d882618eabc9102514158aa2e3768be5b28e9a611fbbb8145204"
+checksum = "c1bc3c4baadbf1c0a9df34a66f0b7d584d1d0d40a135c7b72ee8952214917ffa"
 dependencies = [
  "bulirsch",
  "ndarray",
+ "numpy",
+ "pyo3",
 ]
 
 [[package]]
