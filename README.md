@@ -21,7 +21,7 @@ using the same underlying libraries and the same model for the bright spot.
 Installation should be as simple as 
 
 ```
-pip install lfit_rs
+pip install lfit-rs
 ```
 
 # Usage
