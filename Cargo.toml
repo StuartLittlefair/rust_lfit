@@ -1,11 +1,11 @@
 [package]
-name = "lfit_rust"
+name = "lfit_rs"
 version = "0.1.0"
 edition = "2024"
 
 
 [lib]
-name = "lfit_rust"
+name = "lfit_rs"
 # "cdylib" is necessary to produce a shared library for Python to import from.
 crate-type = ["cdylib"]
 

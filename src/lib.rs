@@ -20,7 +20,7 @@ pub use solve_triads::*;
 
 #[pymodule]
 #[pyo3(name = "rust")]
-fn lfit_rust(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn lfit_rs(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Donor>()?;
     m.add_class::<Whitedwarf>()?;
     m.add_class::<Brightspot>()?;
