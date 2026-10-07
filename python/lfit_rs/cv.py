@@ -8,9 +8,11 @@ the ywd, yd, ys and yrs properties which, when calculated provide arrays
 of the white dwarf, disc, bright spot, and donor star fluxes respectively"""
 
 import matplotlib.collections as mcoll
+import matplotlib.tri as mtri
 import numpy as np
 import roche
 from matplotlib import pyplot as plt
+from matplotlib.widgets import Slider
 
 from .rust import Brightspot, Disc, Donor, Whitedwarf
 
@@ -51,6 +53,20 @@ def colorline(
     ax.add_collection(lc)
 
     return lc
+
+
+def _surface_colors(triangles, flux, visible, cmap_name):
+    """
+    Colour triangle faces by the mean flux of their vertices, using the given
+    colormap. Faces whose vertices are all eclipsed are coloured dark grey.
+    """
+    cmap = plt.get_cmap(cmap_name)
+    face_flux = flux[triangles].mean(axis=1)
+    fmin, fmax = face_flux.min(), face_flux.max()
+    norm = plt.Normalize(fmin, fmax if fmax > fmin else fmin + 1.0)
+    colors = cmap(norm(face_flux))
+    colors[~visible[triangles].all(axis=1)] = (0.1, 0.1, 0.1, 1.0)
+    return colors
 
 
 def make_segments(x, y):
@@ -145,6 +161,12 @@ class CV:
         else:
             self.brightspot = Brightspot(q, rdisc, az, fis, scale)
 
+        # store system parameters (used by plot3d)
+        self.q = q
+        self.dphi = dphi
+        self.rwd = rwd
+        self.rdisc = rdisc
+
         # no fluxes
         self.ywd = None
         self.yd = None
@@ -216,6 +238,12 @@ class CV:
             self.brightspot.tweak(q, rdisc, az, fis, scale, exp1, exp2, tilt, yaw)
         else:
             self.brightspot.tweak(q, rdisc, az, fis, scale)
+
+        # store system parameters (used by plot3d)
+        self.q = q
+        self.dphi = dphi
+        self.rwd = rwd
+        self.rdisc = rdisc
 
         # calculate fluxes
         self.ywd = wdFlux * np.array(self.wd.calcflux(q, incl, phi - phi0, width))
@@ -295,3 +323,222 @@ class CV:
             plt.fill(xs[mask], ys[mask], color="k", alpha=0.2)
 
         plt.gca().set_aspect("equal")
+
+    def _plot3d_context(self):
+        incl = roche.findi(self.q, self.dphi)
+        if incl < 0:
+            raise ValueError(
+                f"Invalid combination of q and dphi: {self.q}, {self.dphi}"
+            )
+        xl1 = roche.xl1(self.q)
+
+        # make sure the surface grids exist
+        if len(self.disc.grid) == 0:
+            self.disc.update_grid(incl)
+        if len(self.donor.grid) == 0:
+            self.donor.update_grid()
+
+        donor_pts = np.array(
+            [[p.position.x, p.position.y, p.position.z] for p in self.donor.grid]
+        )
+        donor_flux = np.array([p.flux for p in self.donor.grid])
+        try:
+            from scipy.spatial import ConvexHull
+
+            donor_triangles = ConvexHull(donor_pts).simplices if len(donor_pts) > 0 else None
+        except ImportError:
+            donor_triangles = None
+
+        disc_pts = np.array(
+            [[p.position.x, p.position.y, p.position.z] for p in self.disc.grid]
+        )
+        disc_flux = np.array([p.flux for p in self.disc.grid])
+        disc_tri = None
+        disc_mask = None
+        if len(disc_pts) > 0:
+            tri = mtri.Triangulation(disc_pts[:, 0], disc_pts[:, 1])
+            # Delaunay fills the central hole; mask triangles inside the inner edge
+            rcent = np.hypot(
+                disc_pts[:, 0][tri.triangles].mean(axis=1),
+                disc_pts[:, 1][tri.triangles].mean(axis=1),
+            )
+            tri.set_mask(rcent < self.rwd * xl1)
+            disc_tri = tri
+            disc_mask = tri.mask
+
+        u = np.linspace(0, 2 * np.pi, 40)
+        v = np.linspace(0, np.pi, 20)
+        rwd_abs = self.rwd * xl1
+        xw = rwd_abs * np.outer(np.cos(u), np.sin(v))
+        yw = rwd_abs * np.outer(np.sin(u), np.sin(v))
+        zw = rwd_abs * np.outer(np.ones_like(u), np.cos(v))
+
+        xs, ys = roche.stream(self.q, 0.01)
+        xt, yt = roche.streamr(self.q, self.rdisc * xl1, n_points=400)
+
+        rspot, _ = roche.bspot(self.q, self.rdisc * xl1, smax=1.0e-4)
+        rs = 0.02
+        xb = rspot.x + rs * np.outer(np.cos(u), np.sin(v))
+        yb = rspot.y + rs * np.outer(np.sin(u), np.sin(v))
+        zb = rs * np.outer(np.ones_like(u), np.cos(v))
+
+        # equal aspect ratio, with limits covering everything plotted
+        bounds = [p for p in (donor_pts, disc_pts) if len(p) > 0]
+        bounds.append(np.column_stack([xs, ys, np.zeros_like(xs)]))
+        bounds = np.vstack(bounds)
+        mid = (bounds.max(axis=0) + bounds.min(axis=0)) / 2
+        max_range = (bounds.max(axis=0) - bounds.min(axis=0)).max() / 2
+        return {
+            "incl": incl,
+            "donor_pts": donor_pts,
+            "donor_flux": donor_flux,
+            "donor_triangles": donor_triangles,
+            "disc_pts": disc_pts,
+            "disc_flux": disc_flux,
+            "disc_tri": disc_tri,
+            "disc_mask": disc_mask,
+            "wd_surface": (xw, yw, zw),
+            "stream_all": (xs, ys),
+            "stream_disc": (xt, yt),
+            "impact_surface": (xb, yb, zb),
+            "mid": mid,
+            "max_range": max_range,
+        }
+
+    def _render_plot3d(self, ax, phi, ctx, preserve_limits=False):
+        donor_vis = np.array([p.is_visible(phi) for p in self.donor.grid])
+        disc_vis = np.array([p.is_visible(phi) for p in self.disc.grid])
+        xlim = ax.get_xlim3d() if preserve_limits else None
+        ylim = ax.get_ylim3d() if preserve_limits else None
+        zlim = ax.get_zlim3d() if preserve_limits else None
+        ax.clear()
+
+        donor_pts = ctx["donor_pts"]
+        donor_triangles = ctx["donor_triangles"]
+        if len(donor_pts) > 0:
+            if donor_triangles is not None:
+                # plot_trisurf has no per-face colour support, so set the
+                # colours on the collection it returns
+                polyc = ax.plot_trisurf(
+                    *donor_pts.T,
+                    triangles=donor_triangles,
+                    edgecolor="none",
+                    shade=False,
+                )
+                polyc.set_facecolors(
+                    _surface_colors(
+                        donor_triangles, ctx["donor_flux"], donor_vis, "autumn"
+                    )
+                )
+            else:
+                ax.scatter(*donor_pts.T, c=ctx["donor_flux"], cmap="autumn", s=5)
+
+        disc_pts = ctx["disc_pts"]
+        disc_tri = ctx["disc_tri"]
+        if len(disc_pts) > 0 and disc_tri is not None:
+            polyc = ax.plot_trisurf(
+                disc_tri, disc_pts[:, 2], edgecolor="none", shade=False
+            )
+            colors = _surface_colors(
+                disc_tri.triangles, ctx["disc_flux"], disc_vis, "hot"
+            )
+            if ctx["disc_mask"] is not None:
+                colors = colors[~ctx["disc_mask"]]
+            polyc.set_facecolors(colors)
+
+        xw, yw, zw = ctx["wd_surface"]
+        ax.plot_surface(xw, yw, zw, color="lightblue", alpha=0.9)
+
+        xs, ys = ctx["stream_all"]
+        ax.plot(xs, ys, np.zeros_like(xs), ":", color="grey")
+        xt, yt = ctx["stream_disc"]
+        ax.plot(xt, yt, np.zeros_like(xt), color="k")
+
+        xb, yb, zb = ctx["impact_surface"]
+        ax.plot_surface(xb, yb, zb, color="gold")
+
+        mid = ctx["mid"]
+        max_range = ctx["max_range"]
+        if preserve_limits:
+            ax.set_xlim(xlim)
+            ax.set_ylim(ylim)
+            ax.set_zlim(zlim)
+        else:
+            ax.set_xlim(mid[0] - max_range, mid[0] + max_range)
+            ax.set_ylim(mid[1] - max_range, mid[1] + max_range)
+            ax.set_zlim(mid[2] - max_range, mid[2] + max_range)
+        ax.set_box_aspect((1, 1, 1))
+
+        # look at the system from the direction of the observer at this phase
+        phi_rad = 2 * np.pi * phi
+        azim = np.degrees(np.arctan2(-np.sin(phi_rad), np.cos(phi_rad)))
+        ax.view_init(elev=90.0 - ctx["incl"], azim=azim)
+
+        ax.set_xlabel("x")
+        ax.set_ylabel("y")
+        ax.set_zlabel("z")
+        ax.set_title(f"phase = {phi:.3f}")
+
+    def plot3d(self, phi):
+        """
+        Produce a 3D visualisation of the CV at orbital phase ``phi``.
+
+        The donor star and accretion disc are rendered as surfaces built from
+        their ``grid`` attributes, coloured by the local surface brightness.
+        Regions eclipsed by the donor at phase ``phi`` are shown dark grey.
+        The white dwarf is rendered as a sphere of radius ``rwd``. The gas
+        stream is shown as a line (solid up to the disc edge, dotted for the
+        ballistic continuation), with a small sphere marking the point where
+        the stream hits the disc.
+
+        The view is oriented along the line of sight to the observer at phase
+        ``phi``. If the surface grids have not been calculated yet (e.g.
+        ``calcFlux`` has not been called) they are calculated here. For a
+        smooth donor surface, create the CV with ``nlat_donor`` around 20 or
+        larger; the default analytical donor model only produces a very
+        coarse grid.
+
+        Parameters
+        ----------
+        phi : float
+            Orbital phase at which to view the system.
+
+        Returns
+        -------
+        fig, ax
+            The matplotlib figure and 3D axes.
+        """
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection="3d")
+        self._render_plot3d(ax, phi, self._plot3d_context())
+        return fig, ax
+
+    def plot3d_interactive(self, phi=0.0):
+        """
+        Produce an interactive 3D visualisation of the CV with a phase slider.
+
+        Parameters
+        ----------
+        phi : float
+            Initial orbital phase.
+
+        Returns
+        -------
+        fig, ax, slider
+            The matplotlib figure, 3D axes and phase slider.
+        """
+        ctx = self._plot3d_context()
+        phi = phi % 1.0
+        fig = plt.figure()
+        fig.subplots_adjust(bottom=0.18)
+        ax = fig.add_subplot(111, projection="3d")
+        self._render_plot3d(ax, phi, ctx)
+
+        slider_ax = fig.add_axes((0.15, 0.06, 0.7, 0.03))
+        slider = Slider(slider_ax, "phase", 0.0, 1.0, valinit=phi)
+
+        def _update(val):
+            self._render_plot3d(ax, val, ctx, preserve_limits=True)
+            fig.canvas.draw_idle()
+        slider.on_changed(_update)
+        return fig, ax, slider
