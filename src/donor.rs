@@ -26,6 +26,7 @@ pub struct Donor {
     beta: f32, // beta = gravity darkening exponent
     ulimb: f32, // limb darkening coefficient
     nlat: usize, // number of latitude points
+    #[pyo3(get)]
     grid: Vec<Point>, // grid points on the donor star
     gmin: f32, // minimum gravity on the donor star (at back face)
     normalisation: f32, // normalisation factor for the flux

@@ -21,6 +21,7 @@ pub struct Disc {
     exp: f64, // exponent of the power law radial brightness distribution
     normalisation: f64, // normalisation factor for the flux
     size: usize, // number of grid points
+    #[pyo3(get)]
     grid: Vec<Point>, // grid points on the disc
     xl1: f64, // separation in units of xl1
 }
