@@ -4,11 +4,10 @@ build-backend = "maturin"
 
 [project]
 name = "lfit_rs"
-version = "0.2.0"
+version = "0.3.0"
 requires-python = ">=3.8"
 
 [tool.maturin]
 python-source = "python"
 module-name = "lfit_rs.rust"
-#features = ["pyo3/extension-module"]
-#cargo-extra-args = "--features extension-module"
+features = ["pyo3/extension-module", "pyo3/abi3-py38"]

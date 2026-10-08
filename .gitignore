@@ -1,1 +1,18 @@
 /target
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.pyd
+.Python
+build/
+dist/
+*.egg-info/
+.venv/
+venv/
+
+# Python tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
