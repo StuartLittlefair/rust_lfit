@@ -8,7 +8,7 @@ use roche::{
 };
 use crate::blink;
 
-#[pyclass(from_py_object)]
+#[pyclass(from_py_object, module = "lfit_rs.rust")]
 #[derive(Debug, Clone)]
 pub struct Whitedwarf {
     // Roche lobe filling donor star
@@ -22,6 +22,11 @@ pub struct Whitedwarf {
 
 #[pymethods]
 impl Whitedwarf {
+    /// Arguments used by pickle to reconstruct the object.
+    fn __getnewargs__(&self) -> (f64, f64) {
+        (self.radius, self.ulimb)
+    }
+
     #[new]
     pub fn new(radius: f64, ulimb: f64) -> Self {
         let wd = Whitedwarf {

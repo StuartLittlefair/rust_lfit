@@ -15,7 +15,7 @@ use roche::{
 use roche::errors::RocheError;
 use crate::blink;
 
-#[pyclass(from_py_object)]
+#[pyclass(from_py_object, module = "lfit_rs.rust")]
 #[derive(Debug, Clone)]
 pub struct Brightspot {
     // Roche lobe filling donor star
@@ -39,6 +39,17 @@ pub struct Brightspot {
 
 #[pymethods]
 impl Brightspot {
+    /// Arguments used by pickle to reconstruct the object.
+    #[allow(clippy::type_complexity)]
+    fn __getnewargs__(&self) -> (f64, f64, f64, f64, f64, Option<f64>, Option<f64>, Option<f64>, Option<f64>, usize) {
+        if self.complex {
+            (self.q, self.rd, self.az, self.frac, self.scale,
+             Some(self.exp1), Some(self.exp2), Some(self.tilt), Some(self.yaw), self.nspot)
+        } else {
+            (self.q, self.rd, self.az, self.frac, self.scale, None, None, None, None, self.nspot)
+        }
+    }
+
     #[new]
     #[pyo3(signature=(q, rd, az, frac, scale, exp1=None, exp2=None, tilt=None, yaw=None, nspot=None),
         text_signature="(q, rd, az, frac, scale, exp1=2, exp2=1, tilt=90, yaw=0, nspot=200)")]

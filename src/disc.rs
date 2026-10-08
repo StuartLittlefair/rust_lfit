@@ -12,7 +12,7 @@ use roche::{
 };
 use roche::errors::RocheError;
 
-#[pyclass(from_py_object)]
+#[pyclass(from_py_object, module = "lfit_rs.rust")]
 #[derive(Debug, Clone)]
 pub struct Disc {
     q: f64, // mass ratio M2/M1
@@ -35,6 +35,12 @@ impl Disc {
     /// /param rout: outer radius in units of separation (converted internally to xl1)
     /// /param exp: exponent of the power law radial brightness distribution
     /// /param size: number of grid points
+    /// Arguments used by pickle to reconstruct the object.
+    fn __getnewargs__(&self) -> (f64, f64, f64, f64, usize) {
+        // rwd and rout are stored internally in units of xl1
+        (self.q, self.rwd / self.xl1, self.rout / self.xl1, self.exp, self.size)
+    }
+
      #[new]
     #[pyo3(signature=(q, rwd, rout, exp, size=None),
         text_signature="(q, rin, rout, exp, size=1000)")]

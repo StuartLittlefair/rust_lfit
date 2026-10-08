@@ -11,7 +11,7 @@ pub fn eggleton(q: f32) -> f32 {
     0.49 * q13.powf(2.0) / (0.6 * q13.powf(2.0) + (1.0 + q13).ln())
 }
 
-#[pyclass(from_py_object)]
+#[pyclass(from_py_object, module = "lfit_rs.rust")]
 #[derive(Debug, Clone)]
     /// Create a new Donor object.
     /// \param q: mass ratio M2/M1
@@ -35,6 +35,11 @@ pub struct Donor {
 
 #[pymethods]
 impl Donor {
+    /// Arguments used by pickle to reconstruct the object.
+    fn __getnewargs__(&self) -> (f32, f32, usize) {
+        (self.q, self.ulimb, if self.approx { 0 } else { self.nlat })
+    }
+
     #[new]
     /// Create a new Donor object.
     /// \param q: mass ratio M2/M1
